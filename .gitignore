@@ -1,2 +1,6 @@
 /output/
 /wandb/
+/evals/
+/cache/
+/.vscode/
+/tmp/
