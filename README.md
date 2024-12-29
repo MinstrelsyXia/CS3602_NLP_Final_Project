@@ -14,3 +14,6 @@ CS3602_NLP Final Project
 - 对于opencompass的测评数据集，若遇到服务器网络问题，可以尝试本地下载报错的.zip文件，后放入`.cache`目录下
 - conda环境见`environment.yml`
 
+3. checkpoint
+分享内容: nlp_ckpt
+链接: https://pan.sjtu.edu.cn/web/share/33128b2a2667f7c36bc6da6ba6944cf4, 提取码: qfwe
