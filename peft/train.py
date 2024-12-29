@@ -284,7 +284,9 @@ def main():
     
     wandb_dict = config_dict.copy() | lora_config.copy()
     # wandb.init(mode='disabled')
-    wandb.login(key="5e4de12fa847ce69f658bd4cd6ef1819aa110ed5")
+    with open('wandb.txt', 'r') as file:
+        wandb_key = file.read()
+    wandb.login(key=wandb_key)
     # 使用config_dict而不是sys.argv
     wandb.init(project="CS3602_NLP_Final_Project", config=wandb_dict, tags=["Qwen2.5-3B"])
     
