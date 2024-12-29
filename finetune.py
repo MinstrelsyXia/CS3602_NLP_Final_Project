@@ -161,9 +161,6 @@ def finetune():
         """
         batch: list of dict, each dict of the list is a sample in the dataset.
         """
-        # pass
-        ### cjy
-        ## cyd
         inputs = []
         labels = []
         max_length = 0
@@ -173,24 +170,17 @@ def finetune():
             input_text = sample.get("input","")
             output_text = sample.get("output","")
 
-            # # 检查input和output是否为空
-            # if not input_text.strip():
-            #     input_text = f"\n{input_text}"
-
             input_text_special = f"instruction: {instruction}\ninput: {input_text}"
             output_text_special = output_text
             # input_text_special, output_text_special = generate_prompt(sample)
             # 构建输入序列
             input_ids = tokenizer.encode_plus(
-                input_text_special, # 将instruction和input_text进行拼接，生成文本输入
-                return_tensors = "pt", # 输出转换为pytorch的张量格式
-                max_length = tokenizer.model_max_length, # 如果输入序列超过最大长度则截断
+                input_text_special, 
+                return_tensors = "pt", 
+                max_length = tokenizer.model_max_length, 
                 truncation = True, 
-                padding = False, # 即使输入序列没有达到最大长度，也不进行填充
-            ).input_ids # 用于获取tokenizer返回字典中的‘input_ids’字段
-            # if input_ids[0, -1] == tokenizer.eos_token_id:
-            #     input_ids = input_ids[:, :-1]
-            # # 构建输出序列
+                padding = False,
+            ).input_ids 
             output_ids = tokenizer.encode_plus(
                 output_text_special,
                 return_tensors = "pt",
@@ -203,29 +193,20 @@ def finetune():
             # 如果output_ids的最后一个token不是eos_token_id，则添加一个eos_token_id
             if output_ids[0, -1] != tokenizer.eos_token_id:
                 output_ids = torch.cat([output_ids, torch.tensor([[tokenizer.eos_token_id]], device=output_ids.device)], dim=1)
-            # 拼接输入与输出序列，获得模型所需的input_ids
+
             full_input = torch.cat([input_ids, output_ids], dim=1)
-            # if (full_input.size(1)>data_args.max_length):
-            #     continue
+
+            # input: [instruction, input, output, padding]
             inputs.append(full_input)
 
-            # 创建标签张量
-            labels_tensor = torch.full_like(full_input, -100) # 用-100填充表示这些位置在损失计算中被忽略
-            labels_tensor[:, input_ids.shape[1]:] = full_input[:, input_ids.shape[1]:] # 将output_ids对应的位置替换为output_ids原来的值，input_ids对应的位置仍为-100，表示学习时只学习output部分
+            labels_tensor = full_input
+            # labels: [instruction, input, output, padding]
             labels.append(labels_tensor)
 
             if full_input.shape[1] > max_length:
                 max_length = full_input.shape[1] + 5
-
-
-        # 处理batch的padding，将同一个batch的label和input都填充到同一个长度
-        # inputs = torch.nn.utils.rnn.pad_sequence(inputs, batch_first=True, padding_value=tokenizer.pad_token_id)
-        # labels = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=-100)
         inputs = [torch.nn.functional.pad(input, (0,max_length - input.size(1)),value=tokenizer.pad_token_id) for input in inputs]
         labels = [torch.nn.functional.pad(label, (0, max_length - label.size(1)), value=-100) for label in labels]
-
-        # inputs = torch.stack(inputs)
-        # labels = torch.stack(labels)
 
         inputs = torch.cat(inputs, dim=0)
         labels = torch.cat(labels, dim=0)
@@ -234,42 +215,7 @@ def finetune():
             "input_ids": inputs,
             "labels": labels,
             "attention_mask": ((inputs != tokenizer.pad_token_id)).to(dtype=torch.int), 
-            # pad_token_id是tokenizer定义的填充令牌ID，也就是对padding的部分填充一个特殊的令牌
-            # 该行代码将生成一个与inputs张量形状相同的布尔张量，其中值为True:表示对应的输入ID不是填充ID（即该令牌是有效的；值为False: 表示对应的输入ID是填充ID（即该令牌是无效的，需要被忽略）。
-            # ((inputs != tokenizer.pad_token_id) & (inputs != labels)).to(dtype=torch.int)
         }
-        ## cyd
-
-            # print("error")
-            # max_length=data_args.max_length
-            # min_input_length=1e6
-            # for sample in batch:
-            #     # resume one bit for <eos>
-            #     input_id=tokenizer.encode("instruction:"+sample["instruction"] if sample["instruction"] else "" + "\n input:"+ sample["input"] if sample["input"] else "", 
-            #                                                    max_length=data_args.max_length-1, truncation=True,padding=False)
-            #     output_id=tokenizer.encode("output:"+sample["output"] if sample["output"] else "",
-            #                                max_length=tokenizer.model_max_length-1, truncation=True, padding=False)
-            #     full_input=input_id+output_id
-            #     attention_mask_one=[True for _ in input_id] + [False for _ in output_id]
-            #     # max_length=len(full_input) if (len(full_input)>max_length) else max_length
-            #     # min_input_length=len(input_id) if (len(input_id)<min_input_length) else min_input_length
-                
-                
-            #     new_batch["input_ids"].append(torch.tensor(full_input).unsqueeze(0))
-            #     new_batch["attention_mask"].append(torch.tensor(attention_mask_one).to(dtype=torch.int).unsqueeze(0))
-            
-            # new_batch["num_logits_to_keep"] = max_length-min_input_length
-    
-    
-            # new_batch["input_ids"] = [torch.nn.functional.pad(input, (0,max_length - input.size(1)),value=tokenizer.pad_token_id) for input in new_batch["input_ids"]]
-            # new_batch["attention_mask"]=[torch.nn.functional.pad(mask, (0,max_length - mask.size(1)),value=False) for mask in new_batch["attention_mask"]]
-    
-            # new_batch["input_ids"] = torch.cat(new_batch["input_ids"],dim=0)
-            # new_batch["attention_mask"] = torch.cat(new_batch["attention_mask"],dim=0).to(dtype=torch.int)
-            # new_batch["labels"]=new_batch["input_ids"][:,-new_batch["num_logits_to_keep"]:]
-    
-            # # print(new_batch["input_ids"].shape,new_batch["attention_mask"].shape,new_batch["labels"].shape)
-            # return new_batch
 
     # TODO Step 5: Define the Trainer
     # HINT: https://huggingface.co/docs/transformers/main_classes/trainer
@@ -301,7 +247,8 @@ def main():
     # 创建一个字典来存储配置参数
     config_dict = {
         "model_name_or_path": "/home/xiaxinyuan/.cache/kagglehub/models/qwen-lm/qwen2.5/transformers/0.5b/1/",
-        "dataset_path": "/home/xiaxinyuan/.cache/kagglehub/datasets/thedevastator/alpaca-language-instruction-training/versions/2/train.csv",
+        # "dataset_path": "/home/xiaxinyuan/.cache/kagglehub/datasets/thedevastator/alpaca-language-instruction-training/versions/2/train.csv",
+        "dataset_path": "/ssd/xiaxinyuan/code/CS3602_NLP_Final_Project/peft/small.csv",
         "torch_dtype": "float32",
         "output_dir": f"/ssd/xiaxinyuan/code/CS3602_NLP_Final_Project/output/{args.version}",
         "remove_unused_columns": "False",
@@ -322,6 +269,7 @@ def main():
         "seed": "42",
         "version": args.version,
         "note": args.note,
+        "logging_steps": "5",
     }
 
     # 更新sys.argv以包含配置参数
@@ -347,10 +295,11 @@ def main():
         "--fp16", config_dict["fp16"],
         "--overwrite_output_dir", config_dict["overwrite_output_dir"],
         "--seed", config_dict["seed"],
+        "--logging_steps", config_dict["logging_steps"],
     ]
     
     if mode == 'train':
-        wandb.login(key="5e4de12fa847ce69f658bd4cd6ef1819aa110ed5")
+        wandb.login(key="xxx")
         # 使用config_dict而不是sys.argv
         wandb.init(project="CS3602_NLP_Final_Project", config=config_dict, tags=["Qwen2.5-0.5B"])
     elif mode == 'debug':

@@ -1,10 +1,11 @@
-from peft import LoraConfig, TaskType, get_peft_model
+from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
 from transformers import (
     AutoModelForCausalLM, 
     AutoTokenizer, 
     TrainingArguments,
     HfArgumentParser,
     Trainer,
+    BitsAndBytesConfig,
 )
 import torch
 from dataclasses import dataclass, field
@@ -13,7 +14,7 @@ import wandb
 import argparse
 import os
 from typing import Optional, List, Dict
-
+import bitsandbytes as bnb
 
 import datasets
 # 配置参数
@@ -61,20 +62,58 @@ class DataArguments:
             "help" : "whether to skip those longer than max length of tokenized data"
         }
     )
-
+class CastOutputToFloat(torch.nn.Sequential):
+    def forward(self, *inputs, **kwargs):
+        return super().forward(*inputs, **kwargs).to(torch.float32)
+    
 def finetune(peft_config):
     parser = HfArgumentParser(dataclass_types=[ModelArguments, DataArguments, TrainingArguments])
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path)
-    # 加载模型和分词器
-    model = AutoModelForCausalLM.from_pretrained(
-        model_args.model_name_or_path,
-        torch_dtype=torch.float16,
-        trust_remote_code=True,  # Qwen模型需要这个参数
-        device_map="balanced" 
+    tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path,
+    )
+    # 创建量化配置
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.float16,
+        bnb_4bit_use_double_quant=False,
+        _attn_implementation="sdpa",# saves memory
     )
 
+    # 加载模型时指定量化配置
+    model = AutoModelForCausalLM.from_pretrained(
+        model_args.model_name_or_path,
+        quantization_config=bnb_config,  # 使用量化配置
+        device_map="auto",
+        trust_remote_code=True,
+    )
+    for param in model.parameters():
+        param.requires_grad = False
+        if param.ndim == 1:
+            param.data = param.data.to(torch.float32)
+    model.gradient_checkpointing_enable()
+    model.enable_input_require_grads()
+    model.is_parallelizable = True
+    model.model_parallel = True
+
+    # 配置 LoRA
+    peft_config = LoraConfig(
+        task_type=TaskType.CAUSAL_LM,
+        inference_mode=False,
+        r=8,
+        lora_alpha=16,
+        lora_dropout=0.05,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+        # 添加以下配置
+        bias="none",  # 不训练偏置
+        modules_to_save=None,  # 不保存完整模块
+    )
+
+    # 准备 PEFT 模型
+    model = prepare_model_for_kbit_training(model)  # 重要：准备量化模型训练
+    model = get_peft_model(model, peft_config)
+    model.print_trainable_parameters()
 
     def data_collator(batch: List[Dict]):
         """
@@ -106,7 +145,7 @@ def finetune(peft_config):
                 max_length = tokenizer.model_max_length, # 如果输入序列超过最大长度则截断
                 truncation = True, 
                 padding = False, # 即使输入序列没有达到最大长度，也不进行填充
-            ).input_ids # 用于获取tokenizer返回字典中的‘input_ids’字段
+            ).input_ids # 用于获取tokenizer返回字典中的'input_ids'字段
             # if input_ids[0, -1] == tokenizer.eos_token_id:
             #     input_ids = input_ids[:, :-1]
             # # 构建输出序列
@@ -158,8 +197,6 @@ def finetune(peft_config):
             # ((inputs != tokenizer.pad_token_id) & (inputs != labels)).to(dtype=torch.int)
         }
     # 获取 PEFT 模型
-    model = get_peft_model(model, peft_config)
-    model.print_trainable_parameters()
 
     # 加载数据集（使用与 finetune.py 相同的数据处理逻辑）
 
@@ -180,7 +217,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Fine-tune a model.")
 
-    parser.add_argument('--gpu_ids', type=str, default='0,1,2,3,4,5,6,7', help='Comma-separated list of GPU IDs to use')
+    parser.add_argument('--gpu_ids', type=str, default='1,2,3,5', help='Comma-separated list of GPU IDs to use')
     # parser.add_argument('--version', type=str, default='0.5B', help='Version of the model')
     # parser.add_argument('--note', type=str, default='', help='Note for the model')
     args = parser.parse_args()
@@ -209,13 +246,14 @@ def main():
         "fp16": "False",
         "overwrite_output_dir": "True",
         "seed": "42",
+        "_attn_implementation": "sdpa",# saves memory
     }
     lora_config = {
         "r": 8,
-        "lora_alpha": 32,
-        "lora_dropout": 0.1,
-        "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj"],
-    }    
+        "lora_alpha": 16,
+        "lora_dropout": 0.05,
+        "target_modules": ["q_proj", "k_proj", "v_proj"],
+    }
     # 更新 sys.argv
     sys.argv = [
             "notebook",
@@ -240,6 +278,7 @@ def main():
             "--bf16", config_dict["bf16"],
             "--overwrite_output_dir", config_dict["overwrite_output_dir"],
             "--seed", config_dict["seed"],
+            "--_attn_implementation", config_dict["_attn_implementation"],
         ]
     
     
@@ -259,7 +298,7 @@ def main():
         # 可以添加更多配置
         target_modules=lora_config["target_modules"],  # 指定需要训练的模块
     )
-
+    
     finetune(peft_config)
 
     # # 保存模型
