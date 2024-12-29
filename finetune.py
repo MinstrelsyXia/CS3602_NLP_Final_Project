@@ -182,12 +182,12 @@ def finetune():
             # input_text_special, output_text_special = generate_prompt(sample)
             # 构建输入序列
             input_ids = tokenizer.encode_plus(
-                input_text_special, # 将instruction和input_text进行拼接，生成文本输入
-                return_tensors = "pt", # 输出转换为pytorch的张量格式
-                max_length = tokenizer.model_max_length, # 如果输入序列超过最大长度则截断
+                input_text_special, 
+                return_tensors = "pt", 
+                max_length = tokenizer.model_max_length, 
                 truncation = True, 
-                padding = False, # 即使输入序列没有达到最大长度，也不进行填充
-            ).input_ids # 用于获取tokenizer返回字典中的‘input_ids’字段
+                padding = False, 
+            ).input_ids 
             # if input_ids[0, -1] == tokenizer.eos_token_id:
             #     input_ids = input_ids[:, :-1]
             # # 构建输出序列
@@ -224,9 +224,6 @@ def finetune():
         inputs = [torch.nn.functional.pad(input, (0,max_length - input.size(1)),value=tokenizer.pad_token_id) for input in inputs]
         labels = [torch.nn.functional.pad(label, (0, max_length - label.size(1)), value=-100) for label in labels]
 
-        # inputs = torch.stack(inputs)
-        # labels = torch.stack(labels)
-
         inputs = torch.cat(inputs, dim=0)
         labels = torch.cat(labels, dim=0)
 
@@ -234,42 +231,8 @@ def finetune():
             "input_ids": inputs,
             "labels": labels,
             "attention_mask": ((inputs != tokenizer.pad_token_id)).to(dtype=torch.int), 
-            # pad_token_id是tokenizer定义的填充令牌ID，也就是对padding的部分填充一个特殊的令牌
-            # 该行代码将生成一个与inputs张量形状相同的布尔张量，其中值为True:表示对应的输入ID不是填充ID（即该令牌是有效的；值为False: 表示对应的输入ID是填充ID（即该令牌是无效的，需要被忽略）。
             # ((inputs != tokenizer.pad_token_id) & (inputs != labels)).to(dtype=torch.int)
         }
-        ## cyd
-
-            # print("error")
-            # max_length=data_args.max_length
-            # min_input_length=1e6
-            # for sample in batch:
-            #     # resume one bit for <eos>
-            #     input_id=tokenizer.encode("instruction:"+sample["instruction"] if sample["instruction"] else "" + "\n input:"+ sample["input"] if sample["input"] else "", 
-            #                                                    max_length=data_args.max_length-1, truncation=True,padding=False)
-            #     output_id=tokenizer.encode("output:"+sample["output"] if sample["output"] else "",
-            #                                max_length=tokenizer.model_max_length-1, truncation=True, padding=False)
-            #     full_input=input_id+output_id
-            #     attention_mask_one=[True for _ in input_id] + [False for _ in output_id]
-            #     # max_length=len(full_input) if (len(full_input)>max_length) else max_length
-            #     # min_input_length=len(input_id) if (len(input_id)<min_input_length) else min_input_length
-                
-                
-            #     new_batch["input_ids"].append(torch.tensor(full_input).unsqueeze(0))
-            #     new_batch["attention_mask"].append(torch.tensor(attention_mask_one).to(dtype=torch.int).unsqueeze(0))
-            
-            # new_batch["num_logits_to_keep"] = max_length-min_input_length
-    
-    
-            # new_batch["input_ids"] = [torch.nn.functional.pad(input, (0,max_length - input.size(1)),value=tokenizer.pad_token_id) for input in new_batch["input_ids"]]
-            # new_batch["attention_mask"]=[torch.nn.functional.pad(mask, (0,max_length - mask.size(1)),value=False) for mask in new_batch["attention_mask"]]
-    
-            # new_batch["input_ids"] = torch.cat(new_batch["input_ids"],dim=0)
-            # new_batch["attention_mask"] = torch.cat(new_batch["attention_mask"],dim=0).to(dtype=torch.int)
-            # new_batch["labels"]=new_batch["input_ids"][:,-new_batch["num_logits_to_keep"]:]
-    
-            # # print(new_batch["input_ids"].shape,new_batch["attention_mask"].shape,new_batch["labels"].shape)
-            # return new_batch
 
     # TODO Step 5: Define the Trainer
     # HINT: https://huggingface.co/docs/transformers/main_classes/trainer
@@ -302,7 +265,8 @@ def main():
     config_dict = {
         "model_name_or_path": "/home/xiaxinyuan/.cache/kagglehub/models/qwen-lm/qwen2.5/transformers/0.5b/1/",
         "dataset_path": "/home/xiaxinyuan/.cache/kagglehub/datasets/thedevastator/alpaca-language-instruction-training/versions/2/train.csv",
-        "torch_dtype": "float32",
+        # "dataset_path": "peft/small.csv",
+        # "torch_dtype": "float32",
         "output_dir": f"/ssd/xiaxinyuan/code/CS3602_NLP_Final_Project/output/{args.version}",
         "remove_unused_columns": "False",
         "max_length": "512",
@@ -322,6 +286,7 @@ def main():
         "seed": "42",
         "version": args.version,
         "note": args.note,
+        
     }
 
     # 更新sys.argv以包含配置参数
@@ -329,7 +294,7 @@ def main():
         "notebook",
         "--model_name_or_path", config_dict["model_name_or_path"],
         "--dataset_path", config_dict["dataset_path"],
-        "--torch_dtype", config_dict["torch_dtype"],
+        # "--torch_dtype", config_dict["torch_dtype"],
         "--output_dir", config_dict["output_dir"],
         "--remove_unused_columns", config_dict["remove_unused_columns"],
         "--max_length", config_dict["max_length"],
@@ -344,7 +309,7 @@ def main():
         "--save_steps", config_dict["save_steps"],
         "--save_total_limit", config_dict["save_total_limit"],
         "--num_train_epochs", config_dict["num_train_epochs"],
-        "--fp16", config_dict["fp16"],
+        # "--fp16", config_dict["fp16"],
         "--overwrite_output_dir", config_dict["overwrite_output_dir"],
         "--seed", config_dict["seed"],
     ]
