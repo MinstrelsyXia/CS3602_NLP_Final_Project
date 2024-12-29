@@ -349,8 +349,10 @@ def main():
         "--seed", config_dict["seed"],
     ]
     
+    with open('wandb.txt', 'r') as file:
+        wandb_key = file.read()
     if mode == 'train':
-        wandb.login(key="5e4de12fa847ce69f658bd4cd6ef1819aa110ed5")
+        wandb.login(key=wandb_key)
         # 使用config_dict而不是sys.argv
         wandb.init(project="CS3602_NLP_Final_Project", config=config_dict, tags=["Qwen2.5-0.5B"])
     elif mode == 'debug':
