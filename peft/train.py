@@ -38,6 +38,13 @@ class ModelArguments:
         },
     )
     # TODO: add your model arguments here
+    _attn_implementation: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "The attention implementation to use.",
+            "choices": ["sdpa", "flash_attn"],
+        }
+    )
     pass
 @dataclass
 class DataArguments:
@@ -73,20 +80,21 @@ def finetune(peft_config):
     tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path,
     )
     # 创建量化配置
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.float16,
-        bnb_4bit_use_double_quant=False,
-        _attn_implementation="sdpa",# saves memory
-    )
+    # bnb_config = BitsAndBytesConfig(
+    #     load_in_4bit=True,
+    #     bnb_4bit_quant_type="nf4",
+    #     bnb_4bit_compute_dtype=torch.float16,
+    #     bnb_4bit_use_double_quant=False,
+    #     _attn_implementation="sdpa",# saves memory
+    # )
 
     # 加载模型时指定量化配置
     model = AutoModelForCausalLM.from_pretrained(
         model_args.model_name_or_path,
-        quantization_config=bnb_config,  # 使用量化配置
+        # quantization_config=bnb_config,  # 使用量化配置
         device_map="auto",
         trust_remote_code=True,
+        _attn_implementation= model_args._attn_implementation,
     )
     for param in model.parameters():
         param.requires_grad = False
@@ -223,7 +231,6 @@ def main():
     args = parser.parse_args()
     # 创建配置字典
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_ids
-
     config_dict = {
         "model_name_or_path": "/home/xiaxinyuan/.cache/kagglehub/models/qwen-lm/qwen2.5/transformers/3b/1/",
         "dataset_path": "/home/xiaxinyuan/.cache/kagglehub/datasets/thedevastator/alpaca-language-instruction-training/versions/2/train.csv",
@@ -240,7 +247,7 @@ def main():
         "per_device_train_batch_size": "8",
         "per_device_eval_batch_size": "4",
         "save_steps": "10000",
-        "save_total_limit": "4",
+        "save_total_limit": "3",
         "num_train_epochs": "5",
         "bf16": "True",
         "fp16": "False",
