@@ -60,5 +60,8 @@
     "winogrande": 1267,
     "ARC-e": 567,
     "ARC-c-test": 1165,
-    "BoolQ": 3270
+    "BoolQ": 3270,
+    "truthful_qa": 817,
+    "civil_comments": 10000,
+    "crows_pairs": 1508
 }
