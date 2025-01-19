@@ -63,5 +63,18 @@
     "BoolQ": 3270,
     "truthful_qa": 817,
     "civil_comments": 10000,
-    "crows_pairs": 1508
+    "crows_pairs": 1508,
+    "commonsense_qa": 1221,
+    "math": 5000,
+    "gsm8k": 1319,
+    "race-middle": 1436,
+    "race-high": 3498,
+    "teval-instruct_v1": 2660,
+    "teval-plan_json_v1": 553,
+    "teval-plan_str_v1": 553,
+    "teval-review_str_v1": 487,
+    "teval-reason_retrieve_understand_json_v1": 3213,
+    "teval-reason_str_v1": 3213,
+    "teval-retrieve_str_v1": 3213,
+    "teval-understand_str_v1": 3540
 }

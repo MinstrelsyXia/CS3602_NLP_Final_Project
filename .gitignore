@@ -7,3 +7,4 @@
 wandb.txt
 /chatbot/chroma_db_en
 /chatbot/baai_models
+/chatbot/model/
